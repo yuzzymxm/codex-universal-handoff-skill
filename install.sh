@@ -17,8 +17,20 @@ cp "$source_skill/SKILL.md" "$target_skill/SKILL.md"
 mkdir -p "$(dirname "$agents_path")"
 touch "$agents_path"
 
-if ! grep -q '^# Universal Handoff Rules[[:space:]]*$' "$agents_path"; then
-  cat >> "$agents_path" <<'EOF'
+tmp_agents="$(mktemp)"
+if grep -q '^# Universal Handoff Rules[[:space:]]*$' "$agents_path"; then
+  had_rules=1
+  awk '/^# Universal Handoff Rules[[:space:]]*$/ { exit } { print }' "$agents_path" > "$tmp_agents"
+else
+  had_rules=0
+  cat "$agents_path" > "$tmp_agents"
+fi
+
+if [[ -s "$tmp_agents" ]]; then
+  printf '\n\n' >> "$tmp_agents"
+fi
+
+cat >> "$tmp_agents" <<'EOF'
 
 # Universal Handoff Rules
 
@@ -47,13 +59,29 @@ if ! grep -q '^# Universal Handoff Rules[[:space:]]*$' "$agents_path"; then
 含义是：
 
 1. 使用 `universal-handoff` Skill。
-2. 在当前项目中创建或更新 `.ai/HANDOFF.md`。
+2. 必须实际创建或更新当前项目的 `.ai/HANDOFF.md`。
 3. 先执行项目盘点，不准直接总结。
-4. 写入当前项目绝对路径：`Project path: <当前项目绝对路径>`。
-5. 只记录后续开发必须知道的信息。
-6. 不总结完整聊天记录。
-7. 不修改业务代码，除非用户明确要求。
-8. 完成后告诉用户：新窗口输入“续上”即可继续。
+4. 如果 `.ai/` 目录不存在，先创建该目录。
+5. 写入当前项目绝对路径：`Project path: <当前项目绝对路径>`。
+6. 只记录后续开发必须知道的信息。
+7. 不总结完整聊天记录。
+8. 不修改业务代码，除非用户明确要求。
+9. 写完后必须检查 `.ai/HANDOFF.md` 是否存在。
+10. 完成后告诉用户：新窗口输入“续上”即可继续。
+
+禁止行为：
+
+- 不得只回复交接总结而不写文件。
+- 不得只建议保存路径或等待用户确认是否保存。
+- 不得默认写到 `docs/HANDOFF.md`、`HANDOFF.md` 或当前项目之外。
+- 如果无法写入，必须说明“未写入”、失败原因和目标绝对路径。
+
+完成回复必须包含：
+
+```text
+已写入: <当前项目绝对路径>/.ai/HANDOFF.md
+验证: 文件存在
+```
 
 ## 续上
 
@@ -82,7 +110,7 @@ if ! grep -q '^# Universal Handoff Rules[[:space:]]*$' "$agents_path"; then
 
 ## 交接防漏规则
 
-当用户输入“交接”“保存进度”“保存开发进度”时，必须先盘点项目，再更新 `.ai/HANDOFF.md`。
+当用户输入“交接”“保存进度”“保存开发进度”时，必须先盘点项目，再实际更新 `.ai/HANDOFF.md`。
 
 交接文档必须覆盖：
 
@@ -111,9 +139,12 @@ if ! grep -q '^# Universal Handoff Rules[[:space:]]*$' "$agents_path"; then
 
 只有用户明确输入“交接”“更新交接”“保存进度”“保存开发进度”时，才更新 `.ai/HANDOFF.md`。
 EOF
-  echo "Installed universal-handoff and appended Universal Handoff Rules."
+mv "$tmp_agents" "$agents_path"
+
+if [[ "$had_rules" -eq 1 ]]; then
+  echo "Installed universal-handoff and updated Universal Handoff Rules."
 else
-  echo "Installed universal-handoff. Universal Handoff Rules already exist; skipped append."
+  echo "Installed universal-handoff and appended Universal Handoff Rules."
 fi
 
 echo "Skill: $target_skill"
